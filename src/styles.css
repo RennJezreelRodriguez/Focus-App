@@ -1,0 +1,717 @@
+/* ==========================================================================
+   1. Theme Variables & Resets
+   ========================================================================== */
+:root {
+  --paper: #F7F5F0;
+  --card: #FFFFFF;
+  --ink: #1C1B19;
+  --graphite: #6B675F;
+  --line: #E1DCCF;
+  --moss: #3F6B4F;
+  --moss-light: #E6EDE7;
+  --danger: #A8462F;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.app {
+  min-height: 100vh;
+  padding-top: max(32px, env(safe-area-inset-top));
+  padding-bottom: max(100px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.app h1, .app h2, .app .card-title, .app .modal-title { 
+  font-family: 'Fraunces', Georgia, serif; 
+}
+
+/* ==========================================================================
+   2. Header & Clean Monochrome Controls
+   ========================================================================== */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.header h1 { 
+  font-size: 26px; 
+  font-weight: 600; 
+  margin: 0; 
+  letter-spacing: -0.02em;
+}
+
+.header-right { 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+}
+
+/* Tooltip Icon Buttons - Completely Monochrome */
+.icon-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--graphite);
+  font-size: 15px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.icon-btn-wrapper::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px) scale(0.95);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.icon-btn-wrapper:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(8px) scale(1);
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--graphite);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+.back-btn:hover { opacity: 1; color: var(--ink); }
+
+/* Backup Dot Indicator - Monochrome Graphite */
+.dot-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  background: var(--graphite);
+  border-radius: 50%;
+}
+
+/* TikTok-style Lit/Unlit Streak Badge */
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.streak-badge.unlit {
+  background: var(--line);
+  filter: grayscale(100%);
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+.streak-badge.lit {
+  background: var(--ink);
+  color: var(--paper);
+  filter: grayscale(0%);
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 0 12px rgba(28, 27, 25, 0.15);
+}
+
+/* ==========================================================================
+   3. Grid & Minimalist Dashboard Cards
+   ========================================================================== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.card:hover { 
+  border-color: var(--graphite); 
+  transform: translateY(-1px);
+}
+
+.card-category { font-size: 10px; color: var(--graphite); text-transform: uppercase; letter-spacing: 0.05em; }
+.card-title { font-size: 18px; font-weight: 600; margin: 0; line-height: 1.3; }
+.card-stats { 
+  font-size: 11px; 
+  color: var(--graphite); 
+  margin-top: auto; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+}
+
+.add-slot {
+  border: 1px dashed var(--line);
+  background: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--graphite);
+  cursor: pointer;
+  min-height: 140px;
+}
+.add-slot:hover { border-color: var(--ink); color: var(--ink); background: transparent; }
+
+/* ==========================================================================
+   4. Goal Workspace & Daily Checklist
+   ========================================================================== */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.workspace-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.workspace-stats-bar {
+  display: flex;
+  gap: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 12px;
+}
+
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-pill .label { font-size: 10px; color: var(--graphite); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat-pill .value { font-weight: 700; color: var(--ink); }
+
+.action-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.action-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.key-badge {
+  font-size: 10px;
+  color: var(--graphite);
+  background: var(--line);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.action-schedule-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--line);
+  color: var(--graphite);
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.checkbox-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--graphite);
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+}
+.checkbox-btn.done {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.action-label { font-size: 13px; }
+.action-label.done { text-decoration: line-through; opacity: 0.5; }
+
+.action-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   5. Interactive Grid & Detail Drawer
+   ========================================================================== */
+.history-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.history-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.history-label { font-size: 12px; color: var(--graphite); width: 100px; }
+
+.days-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.day-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  padding: 0;
+  position: relative;
+}
+.day-box:hover:not(.future) { border-color: var(--ink); transform: translateY(-1px); }
+.day-box.selected { 
+  outline: 2px solid var(--ink); 
+  outline-offset: 1px;
+  border-color: var(--ink); 
+}
+
+.day-box.full { background: var(--ink); color: white; border-color: var(--ink); }
+.day-box.partial { background: var(--line); border-color: var(--graphite); color: var(--ink); }
+.day-box.empty { background: var(--paper); color: var(--graphite); }
+.day-box.future { background: var(--paper); color: var(--line); border-style: dashed; cursor: default; }
+
+.day-box.has-note::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--graphite);
+}
+
+.day-drawer {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 8px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.drawer-status { font-weight: bold; }
+.drawer-status.done { color: var(--ink); }
+.drawer-status.missed { color: var(--graphite); opacity: 0.6; }
+
+.note-input {
+  width: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  outline: none;
+}
+.note-input:focus { border-color: var(--graphite); }
+
+/* Day Scheduling Pill Selector */
+.days-pill-selector {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.day-pill {
+  flex: 1;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.day-pill.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* Collapsible Archive Section */
+.archive-section {
+  margin-top: 32px;
+  border-top: 1px dashed var(--line);
+  padding-top: 16px;
+}
+
+.archive-toggle {
+  background: none;
+  border: none;
+  color: var(--graphite);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.archive-toggle:hover { color: var(--ink); }
+
+/* ==========================================================================
+   6. Buttons & Modals
+   ========================================================================== */
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  border-radius: 6px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn.small { padding: 4px 8px; font-size: 11px; }
+.btn.ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+.btn.ghost:hover { border-color: var(--graphite); }
+.btn.ghost.danger { color: var(--danger); border-color: var(--danger); }
+.btn.ghost.danger:hover { background: #fdf2f0; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28,27,25,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--paper);
+  border-radius: 12px;
+  padding: 22px;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--line);
+}
+
+.modal-title { font-size: 18px; font-weight: 600; margin-bottom: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--graphite); margin-bottom: 12px; }
+.field input, .field select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+.modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.spacer { flex: 1; }
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  margin: 12px 0;
+}
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.shortcut-row kbd {
+  background: var(--line);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+@media (hover: hover) {
+  .icon-btn-wrapper:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(8px) scale(1);
+  }
+}
+
+/* ==========================================================================
+   7. Install Prompt Banner (macOS-style frosted card)
+   ========================================================================== */
+@keyframes installBannerIn {
+  from { opacity: 0; transform: translate(-50%, 12px) scale(0.98); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.install-banner {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translate(-50%, 0);
+  width: calc(100% - 40px);
+  max-width: 380px;
+  z-index: 200;
+
+  background: rgba(247, 245, 240, 0.78);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(28, 27, 25, 0.08);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(28, 27, 25, 0.04),
+    0 12px 32px rgba(28, 27, 25, 0.16);
+  padding: 14px 16px 14px 14px;
+
+  animation: installBannerIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.install-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 18px; /* keep clear of the close dot */
+}
+
+.install-banner-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10.5px; /* ~ iOS-style squircle proportion */
+  border: 1px solid rgba(28, 27, 25, 0.08);
+  flex-shrink: 0;
+  display: block;
+}
+
+.install-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.install-banner-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.install-banner-subtitle {
+  font-size: 11px;
+  color: var(--graphite);
+  line-height: 1.35;
+}
+
+.install-banner-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(28, 27, 25, 0.08);
+}
+
+.install-banner-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.install-banner-btn.ghost {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--graphite);
+}
+.install-banner-btn.ghost:hover {
+  background: rgba(28, 27, 25, 0.06);
+  color: var(--ink);
+}
+
+.install-banner-btn.primary {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+}
+.install-banner-btn.primary:hover {
+  background: #000;
+}
+
+/* Small traffic-light-style dismiss dot, top-left like a macOS window control */
+.install-banner-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(28, 27, 25, 0.12);
+  background: rgba(28, 27, 25, 0.04);
+  color: var(--graphite);
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+.install-banner-close:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
