@@ -551,6 +551,92 @@ html, body {
 .btn.ghost.danger:hover { background: #fdf2f0; }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
+/* Value-goal log tabs (+/- Change vs New Total) */
+.value-log-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.value-log-tab {
+  flex: 1;
+  padding: 8px 0;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--graphite);
+}
+.value-log-tab.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* Value-goal update ledger */
+.value-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.value-history-item {
+  position: relative;
+  padding: 10px 32px 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.value-history-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+}
+.value-history-delta.positive { color: var(--moss); }
+.value-history-delta.negative { color: var(--danger); }
+.value-history-date {
+  font-size: 10px;
+  color: var(--graphite);
+  font-weight: 500;
+}
+.value-history-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--graphite);
+}
+.value-history-note {
+  font-style: italic;
+  opacity: 0.85;
+}
+.value-history-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--graphite);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.value-history-delete:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -583,7 +669,8 @@ html, body {
   padding: 8px;
 }
 .field-row { display: flex; gap: 10px; }
-.field-row .field { flex: 1; }
+.field-row .field { flex: 1; min-width: 0; }
+.field-row .field input, .field-row .field select { width: 100%; min-width: 0; }
 .modal-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .spacer { flex: 1; }
 
