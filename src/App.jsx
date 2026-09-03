@@ -1,5 +1,6 @@
 import React from 'react';
 import InstallPrompt from './InstallPrompt.jsx';
+import BackupReminder from './BackupReminder.jsx';
 
 // ==========================================================================
 // 1. Helpers & Timezone-Safe Date Storage Setup (Patched Version)
@@ -142,6 +143,30 @@ function StreakDisplay({ count, isLit }) {
     <span className={`streak-badge ${isLit ? "lit" : "unlit"}`} title={isLit ? "Streak maintained for today!" : "Complete today's actions to light up streak"}>
       🔥 {count}d
     </span>
+  );
+}
+
+function GoalProgressBar({ completed, total }) {
+  if (total === 0) {
+    return (
+      <div className="goal-progress-inline">
+        <div className="goal-progress-track">
+          <div className="goal-progress-fill" style={{ width: "0%" }} />
+        </div>
+        <span className="goal-progress-label">Nothing scheduled today</span>
+      </div>
+    );
+  }
+
+  const pct = Math.round((completed / total) * 100);
+
+  return (
+    <div className="goal-progress-inline">
+      <div className="goal-progress-track">
+        <div className="goal-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="goal-progress-label">{completed}/{total} today ({pct}%)</span>
+    </div>
   );
 }
 
@@ -378,6 +403,10 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
   const isLit = React.useMemo(() => isStreakLitToday(goal), [goal, todayProgress]);
   const weeklyRate = React.useMemo(() => calculateWeeklyRate(goal), [goal]);
 
+  const todayCompletedCount = React.useMemo(() => {
+    return todayActions.filter(a => (todayProgress[a.id] || 0) >= a.target).length;
+  }, [todayActions, todayProgress]);
+
   // Fixed: Included goal and onUpdateGoal dependencies to eliminate stale closure bugs
   React.useEffect(() => {
     function handleKeyDown(e) {
@@ -519,6 +548,7 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
           <div>
             <div className="card-category">{goal.category}</div>
             <h2 className="card-title" style={{ fontSize: 24 }}>{goal.title}</h2>
+            <GoalProgressBar completed={todayCompletedCount} total={todayActions.length} />
           </div>
           <div style={{ display: "flex", gap: "4px" }}>
             <SymbolButton symbol="⌨" label="Keyboard Shortcuts" onClick={() => setShortcutsModalOpen(true)} />
@@ -805,11 +835,21 @@ function FocusGoalTracker() {
     return daysSince > 14;
   }, [lastBackup]);
 
+  const hasMeaningfulData = React.useMemo(() => {
+    if (!goals || goals.length === 0) return false;
+    return goals.some(g => g.actions.length > 0 || Object.keys(g.history || {}).length > 0);
+  }, [goals]);
+
   const activeGoal = goals?.find(g => g.id === activeGoalId);
 
   return (
     <div className="app">
       <InstallPrompt />
+      <BackupReminder
+        hasData={hasMeaningfulData}
+        needsBackup={needsBackupNotice}
+        onBackupNow={exportBackup}
+      />
       <div className="header">
         <h1>Focus</h1>
         <div className="header-right">
