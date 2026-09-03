@@ -41,6 +41,18 @@ function getTodayKey() {
   return formatDateKey(new Date());
 }
 
+function isActionScheduledForDay(action, dayIndex) {
+  if (!action.scheduleType || action.scheduleType === "daily") return true;
+  return Array.isArray(action.days) && action.days.includes(dayIndex);
+}
+
+function formatScheduleLabel(action) {
+  if (!action.scheduleType || action.scheduleType === "daily") return "Daily";
+  if (!action.days || action.days.length === 0) return "No days";
+  if (action.days.length === 7) return "Daily";
+  return action.days.map(i => DAYS_OF_WEEK[i]).join(", ");
+}
+
 function calculateValueProgress(goal) {
   const start = goal.startValue ?? 0;
   const target = goal.targetValue ?? 0;
@@ -109,7 +121,7 @@ function ValueLogModal({ goal, onSubmit, onClose }) {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">Log an Update</div>
+        <div className="modal-title">Log a Progress Update</div>
 
         <div className="value-log-tabs">
           <button
@@ -139,14 +151,14 @@ function ValueLogModal({ goal, onSubmit, onClose }) {
             step="any"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder={mode === "change" ? "e.g. -1 or 5" : `Current: ${formatNum(goal.currentValue)}`}
+            placeholder={mode === "change" ? "e.g. 1 or -0.5" : `Current: ${formatNum(goal.currentValue)}`}
             autoFocus
           />
         </label>
 
         <label className="field">
           <span>Note (optional)</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Morning weigh-in" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Weekly weigh-in" />
         </label>
 
         <div className="modal-actions">
@@ -165,7 +177,7 @@ function ValueHistoryList({ goal, onDeleteEntry }) {
   if (entries.length === 0) {
     return (
       <div style={{ fontSize: 13, color: "var(--graphite)", textAlign: "center", padding: "20px 0" }}>
-        No updates logged yet.
+        No progress updates logged yet.
       </div>
     );
   }
@@ -201,7 +213,7 @@ function ValueHistoryList({ goal, onDeleteEntry }) {
 }
 
 // ==========================================================================
-// 2. Modals (Goal Settings)
+// 2. Modals (Goal Settings & Action Modal)
 // ==========================================================================
 function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
   const isEdit = !!initialGoal;
@@ -220,14 +232,14 @@ function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
       title: title.trim(),
       category,
       archived: initialGoal?.archived || false,
-      goalType: "value",
       unit: unit.trim(),
       startValue: start,
       targetValue: Number(targetValue) || 0,
       currentValue: initialGoal?.currentValue ?? start,
       valueLog: initialGoal?.valueLog || [],
-      history: {},
-      notes: {},
+      actions: initialGoal?.actions || [],
+      history: initialGoal?.history || {},
+      notes: initialGoal?.notes || {},
     });
   }
 
@@ -258,11 +270,11 @@ function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
 
         <div className="field-row">
           <label className="field">
-            <span>Starting Value</span>
+            <span>Starting Progress</span>
             <input type="number" step="any" value={startValue} onChange={(e) => setStartValue(e.target.value)} />
           </label>
           <label className="field">
-            <span>Target Value</span>
+            <span>Target Goal</span>
             <input type="number" step="any" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
           </label>
         </div>
@@ -293,12 +305,147 @@ function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
   );
 }
 
+function ActionModal({ initialAction, onSave, onDelete, onClose }) {
+  const isEdit = !!initialAction;
+  const [name, setName] = React.useState(initialAction?.name || "");
+  const [type, setType] = React.useState(initialAction?.type || "checkbox");
+  const [target, setTarget] = React.useState(initialAction?.target ?? 1);
+  const [step, setStep] = React.useState(initialAction?.step ?? 1);
+  const [unit, setUnit] = React.useState(initialAction?.unit || "");
+  const [scheduleType, setScheduleType] = React.useState(initialAction?.scheduleType || "daily");
+  const [selectedDays, setSelectedDays] = React.useState(initialAction?.days || [0,1,2,3,4,5,6]);
+
+  function toggleDay(dayIndex) {
+    if (selectedDays.includes(dayIndex)) {
+      if (selectedDays.length === 1) return;
+      setSelectedDays(selectedDays.filter(d => d !== dayIndex));
+    } else {
+      setSelectedDays([...selectedDays, dayIndex].sort());
+    }
+  }
+
+  function submit() {
+    if (!name.trim()) return;
+    onSave({
+      id: initialAction?.id || uid(),
+      name: name.trim(),
+      type,
+      target: type === "checkbox" ? 1 : Number(target) || 1,
+      step: type === "checkbox" ? 1 : Number(step) || 1,
+      unit: type === "checkbox" ? "" : unit.trim(),
+      scheduleType,
+      days: scheduleType === "daily" ? [0,1,2,3,4,5,6] : selectedDays,
+    });
+  }
+
+  function handleDelete() {
+    if (confirm(`Delete action "${initialAction.name}"?`)) {
+      onDelete(initialAction.id);
+    }
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">{isEdit ? "Edit Action" : "Add Action"}</div>
+        <label className="field">
+          <span>Action Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Gym workout 30 mins" autoFocus />
+        </label>
+
+        <label className="field">
+          <span>Frequency / Schedule</span>
+          <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value)}>
+            <option value="daily">Everyday</option>
+            <option value="specific">Specific Days</option>
+          </select>
+        </label>
+
+        {scheduleType === "specific" && (
+          <div className="field">
+            <span>Active Days</span>
+            <div className="days-pill-selector">
+              {DAYS_OF_WEEK.map((day, idx) => (
+                <div
+                  key={day}
+                  className={`day-pill ${selectedDays.includes(idx) ? "active" : ""}`}
+                  onClick={() => toggleDay(idx)}
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <label className="field">
+          <span>Action Type</span>
+          <select value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="checkbox">Simple Checkbox</option>
+            <option value="counter">Step Counter</option>
+          </select>
+        </label>
+
+        {type === "counter" && (
+          <div className="field-row">
+            <label className="field">
+              <span>Target</span>
+              <input type="number" min="1" value={target} onChange={(e) => setTarget(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Step</span>
+              <input type="number" min="1" value={step} onChange={(e) => setStep(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Unit</span>
+              <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="mins, reps" />
+            </label>
+          </div>
+        )}
+
+        <div className="modal-actions">
+          {isEdit && (
+            <button className="btn ghost danger" onClick={handleDelete}>
+              Delete
+            </button>
+          )}
+          <div className="spacer" />
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={submit}>
+            {isEdit ? "Save" : "Add Action"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ==========================================================================
 // 3. Goal Workspace Component
 // ==========================================================================
 function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal }) {
+  const [actionModalOpen, setActionModalOpen] = React.useState(false);
   const [goalModalOpen, setGoalModalOpen] = React.useState(false);
   const [valueLogModalOpen, setValueLogModalOpen] = React.useState(false);
+  const [editingAction, setEditingAction] = React.useState(null);
+
+  function saveAction(action) {
+    const exists = goal.actions.some(a => a.id === action.id);
+    const updatedActions = exists
+      ? goal.actions.map(a => a.id === action.id ? action : a)
+      : [...goal.actions, action];
+
+    onUpdateGoal({ ...goal, actions: updatedActions });
+    setActionModalOpen(false);
+    setEditingAction(null);
+  }
+
+  function deleteAction(actionId) {
+    const updatedActions = goal.actions.filter(a => a.id !== actionId);
+    onUpdateGoal({ ...goal, actions: updatedActions });
+    setActionModalOpen(false);
+    setEditingAction(null);
+  }
 
   function logValueUpdate({ delta, resultingValue, note }) {
     const entry = { id: uid(), date: new Date().toISOString(), delta, resultingValue, note };
@@ -331,11 +478,11 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
 
       <div className="workspace-stats-bar">
         <div className="stat-pill">
-          <span className="label">Current</span>
+          <span className="label">Current Progress</span>
           <span className="value">{formatNum(goal.currentValue)}{goal.unit}</span>
         </div>
         <div className="stat-pill">
-          <span className="label">Target</span>
+          <span className="label">Target Goal</span>
           <span className="value">{formatNum(goal.targetValue)}{goal.unit}</span>
         </div>
         <div className="stat-pill">
@@ -344,12 +491,44 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
         </div>
       </div>
 
+      {/* Progress Updates Section */}
       <div className="action-section">
         <div className="section-title">
-          <span>Update History</span>
-          <SymbolButton symbol="+" label="Log an Update" onClick={() => setValueLogModalOpen(true)} />
+          <span>Progress Updates</span>
+          <SymbolButton symbol="+" label="Update Progress" onClick={() => setValueLogModalOpen(true)} />
         </div>
         <ValueHistoryList goal={goal} onDeleteEntry={deleteValueLogEntry} />
+      </div>
+
+      {/* Actions Section */}
+      <div className="action-section">
+        <div className="section-title">
+          <span>Goal Actions ({goal.actions.length})</span>
+          <SymbolButton symbol="+" label="Add Action" onClick={() => { setEditingAction(null); setActionModalOpen(true); }} />
+        </div>
+
+        {goal.actions.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--graphite)", textAlign: "center", padding: "20px 0" }}>
+            No actions configured yet. Add actions to help you reach this goal.
+          </div>
+        ) : (
+          <div className="action-list">
+            {goal.actions.map((a) => (
+              <div key={a.id} className="action-item">
+                <div className="action-left">
+                  <div>
+                    <span className="action-label">{a.name}</span>
+                    <span className="action-schedule-tag">{formatScheduleLabel(a)}</span>
+                  </div>
+                </div>
+                <div className="action-right">
+                  <SymbolButton symbol="✎" label="Edit Action" onClick={() => { setEditingAction(a); setActionModalOpen(true); }} />
+                  <SymbolButton symbol="×" label="Delete Action" onClick={() => deleteAction(a.id)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {valueLogModalOpen && (
@@ -357,6 +536,15 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
           goal={goal}
           onSubmit={logValueUpdate}
           onClose={() => setValueLogModalOpen(false)}
+        />
+      )}
+
+      {actionModalOpen && (
+        <ActionModal 
+          initialAction={editingAction} 
+          onSave={saveAction} 
+          onDelete={deleteAction}
+          onClose={() => { setActionModalOpen(false); setEditingAction(null); }} 
         />
       )}
 
@@ -487,7 +675,7 @@ function FocusGoalTracker() {
 
   const hasMeaningfulData = React.useMemo(() => {
     if (!goals || goals.length === 0) return false;
-    return goals.some(g => (g.valueLog && g.valueLog.length > 0));
+    return goals.some(g => (g.valueLog && g.valueLog.length > 0) || (g.actions && g.actions.length > 0));
   }, [goals]);
 
   const activeGoal = goals?.find(g => g.id === activeGoalId);
