@@ -41,88 +41,25 @@ function getTodayKey() {
   return formatDateKey(new Date());
 }
 
-function isActionScheduledForDay(action, dayIndex) {
-  if (!action.scheduleType || action.scheduleType === "daily") return true;
-  return Array.isArray(action.days) && action.days.includes(dayIndex);
+function calculateValueProgress(goal) {
+  const start = goal.startValue ?? 0;
+  const target = goal.targetValue ?? 0;
+  const current = goal.currentValue ?? start;
+
+  if (target === start) return { pct: 100, direction: "flat" };
+
+  const direction = target > start ? "up" : "down";
+  const raw = direction === "up"
+    ? ((current - start) / (target - start)) * 100
+    : ((start - current) / (start - target)) * 100;
+
+  return { pct: Math.max(0, Math.min(100, Math.round(raw))), direction };
 }
 
-function formatScheduleLabel(action) {
-  if (!action.scheduleType || action.scheduleType === "daily") return "Daily";
-  if (!action.days || action.days.length === 0) return "No days";
-  if (action.days.length === 7) return "Daily";
-  return action.days.map(i => DAYS_OF_WEEK[i]).join(", ");
-}
-
-function calculateStreak(goal) {
-  const today = new Date();
-  let streak = 0;
-  let checkDate = new Date(today);
-  let daysChecked = 0;
-
-  while (daysChecked < 365) {
-    daysChecked++;
-    const key = formatDateKey(checkDate);
-    const dayIndex = checkDate.getDay();
-    const scheduledActions = goal.actions.filter(a => isActionScheduledForDay(a, dayIndex));
-
-    if (scheduledActions.length === 0) {
-      checkDate.setDate(checkDate.getDate() - 1);
-      continue;
-    }
-
-    const dayHistory = goal.history[key] || {};
-    const allDone = scheduledActions.every(a => (dayHistory[a.id] || 0) >= a.target);
-
-    if (allDone) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      if (key === getTodayKey()) {
-        checkDate.setDate(checkDate.getDate() - 1);
-        continue;
-      }
-      break;
-    }
-  }
-
-  return streak;
-}
-
-function isStreakLitToday(goal) {
-  const todayKey = getTodayKey();
-  const todayDayIndex = new Date().getDay();
-  const scheduled = goal.actions.filter(a => isActionScheduledForDay(a, todayDayIndex));
-
-  if (scheduled.length === 0) return true;
-
-  const dayHistory = goal.history[todayKey] || {};
-  return scheduled.every(a => (dayHistory[a.id] || 0) >= a.target);
-}
-
-function calculateWeeklyRate(goal) {
-  const now = new Date();
-  let totalScheduled = 0;
-  let totalCompleted = 0;
-
-  for (let i = 0; i < 7; i++) {
-    const checkDate = new Date(now);
-    checkDate.setDate(now.getDate() - i);
-    const key = formatDateKey(checkDate);
-    const dayIndex = checkDate.getDay();
-
-    const scheduled = goal.actions.filter(a => isActionScheduledForDay(a, dayIndex));
-    const dayHistory = goal.history[key] || {};
-
-    scheduled.forEach(a => {
-      totalScheduled++;
-      if ((dayHistory[a.id] || 0) >= a.target) {
-        totalCompleted++;
-      }
-    });
-  }
-
-  if (totalScheduled === 0) return 100;
-  return Math.round((totalCompleted / totalScheduled) * 100);
+function formatNum(n) {
+  if (n === undefined || n === null || Number.isNaN(n)) return 0;
+  if (Number.isInteger(n)) return n;
+  return Math.round(n * 100) / 100;
 }
 
 function SymbolButton({ symbol, label, onClick, hasBadge }) {
@@ -136,58 +73,161 @@ function SymbolButton({ symbol, label, onClick, hasBadge }) {
   );
 }
 
-function StreakDisplay({ count, isLit }) {
-  return (
-    <span className={`streak-badge ${isLit ? "lit" : "unlit"}`} title={isLit ? "Streak maintained for today!" : "Complete today's actions to light up streak"}>
-      🔥 {count}d
-    </span>
+function ValueProgressBar({ goal }) {
+  const { pct } = React.useMemo(
+    () => calculateValueProgress(goal),
+    [goal.currentValue, goal.startValue, goal.targetValue]
   );
-}
-
-function GoalProgressBar({ completed, total }) {
-  if (total === 0) {
-    return (
-      <div className="goal-progress-inline">
-        <div className="goal-progress-track">
-          <div className="goal-progress-fill" style={{ width: "0%" }} />
-        </div>
-        <span className="goal-progress-label">Nothing scheduled today</span>
-      </div>
-    );
-  }
-
-  const pct = Math.round((completed / total) * 100);
 
   return (
     <div className="goal-progress-inline">
       <div className="goal-progress-track">
         <div className="goal-progress-fill" style={{ width: `${pct}%` }} />
       </div>
-      <span className="goal-progress-label">{completed}/{total} today ({pct}%)</span>
+      <span className="goal-progress-label">
+        {formatNum(goal.currentValue)}{goal.unit} / {formatNum(goal.targetValue)}{goal.unit} ({pct}%)
+      </span>
+    </div>
+  );
+}
+
+function ValueLogModal({ goal, onSubmit, onClose }) {
+  const [mode, setMode] = React.useState("change"); // "change" | "total"
+  const [amount, setAmount] = React.useState("");
+  const [note, setNote] = React.useState("");
+
+  function submit() {
+    const num = Number(amount);
+    if (Number.isNaN(num) || amount.trim() === "") return;
+
+    const resultingValue = mode === "change" ? goal.currentValue + num : num;
+    const delta = mode === "change" ? num : num - goal.currentValue;
+
+    onSubmit({ delta, resultingValue, note: note.trim() });
+  }
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">Log an Update</div>
+
+        <div className="value-log-tabs">
+          <button
+            type="button"
+            className={`value-log-tab ${mode === "change" ? "active" : ""}`}
+            onClick={() => setMode("change")}
+          >
+            +/- Change
+          </button>
+          <button
+            type="button"
+            className={`value-log-tab ${mode === "total" ? "active" : ""}`}
+            onClick={() => setMode("total")}
+          >
+            New Total
+          </button>
+        </div>
+
+        <label className="field">
+          <span>
+            {mode === "change"
+              ? `Amount${goal.unit ? ` (${goal.unit})` : ""} — use a minus sign for a decrease`
+              : `New Total${goal.unit ? ` (${goal.unit})` : ""}`}
+          </span>
+          <input
+            type="number"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder={mode === "change" ? "e.g. -1 or 5" : `Current: ${formatNum(goal.currentValue)}`}
+            autoFocus
+          />
+        </label>
+
+        <label className="field">
+          <span>Note (optional)</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Morning weigh-in" />
+        </label>
+
+        <div className="modal-actions">
+          <div className="spacer" />
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={submit}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ValueHistoryList({ goal, onDeleteEntry }) {
+  const entries = [...(goal.valueLog || [])].reverse();
+
+  if (entries.length === 0) {
+    return (
+      <div style={{ fontSize: 13, color: "var(--graphite)", textAlign: "center", padding: "20px 0" }}>
+        No updates logged yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="value-history-list">
+      {entries.map(entry => (
+        <div key={entry.id} className="value-history-item">
+          <div className="value-history-main">
+            <span className={`value-history-delta ${entry.delta >= 0 ? "positive" : "negative"}`}>
+              {entry.delta >= 0 ? "+" : ""}{formatNum(entry.delta)}{goal.unit}
+            </span>
+            <span className="value-history-date">
+              {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+          <div className="value-history-sub">
+            <span>→ {formatNum(entry.resultingValue)}{goal.unit}</span>
+            {entry.note && <span className="value-history-note">{entry.note}</span>}
+          </div>
+          <button
+            className="value-history-delete"
+            onClick={() => onDeleteEntry(entry.id)}
+            aria-label="Delete entry"
+            title="Delete entry"
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
 
 // ==========================================================================
-// 2. Modals (Goal Settings, Action Modal, Keyboard Help)
+// 2. Modals (Goal Settings)
 // ==========================================================================
 function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
   const isEdit = !!initialGoal;
   const [title, setTitle] = React.useState(initialGoal?.title || "");
   const [category, setCategory] = React.useState(initialGoal?.category || CATEGORIES[0]);
+  const [unit, setUnit] = React.useState(initialGoal?.unit || "");
+  const [startValue, setStartValue] = React.useState(initialGoal?.startValue ?? 0);
+  const [targetValue, setTargetValue] = React.useState(initialGoal?.targetValue ?? 100);
 
   function submit() {
     if (!title.trim()) return;
 
+    const start = Number(startValue) || 0;
     onSave({
       id: initialGoal?.id || uid(),
       title: title.trim(),
       category,
       archived: initialGoal?.archived || false,
-      goalType: "actions",
-      actions: initialGoal?.actions || [],
-      history: initialGoal?.history || {},
-      notes: initialGoal?.notes || {},
+      goalType: "value",
+      unit: unit.trim(),
+      startValue: start,
+      targetValue: Number(targetValue) || 0,
+      currentValue: initialGoal?.currentValue ?? start,
+      valueLog: initialGoal?.valueLog || [],
+      history: {},
+      notes: {},
     });
   }
 
@@ -207,13 +247,28 @@ function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
         <div className="modal-title">{isEdit ? "Workspace Settings" : "New Goal Workspace"}</div>
         <label className="field">
           <span>Goal Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Master System Design" autoFocus />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Reach 55kg" autoFocus />
         </label>
         <label className="field">
           <span>Category</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+        </label>
+
+        <div className="field-row">
+          <label className="field">
+            <span>Starting Value</span>
+            <input type="number" step="any" value={startValue} onChange={(e) => setStartValue(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Target Value</span>
+            <input type="number" step="any" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} />
+          </label>
+        </div>
+        <label className="field">
+          <span>Unit</span>
+          <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kg, $, lbs (optional)" />
         </label>
 
         <div className="modal-actions">
@@ -238,307 +293,25 @@ function GoalModal({ initialGoal, onSave, onArchive, onDelete, onClose }) {
   );
 }
 
-function ActionModal({ initialAction, onSave, onDelete, onClose }) {
-  const isEdit = !!initialAction;
-  const [name, setName] = React.useState(initialAction?.name || "");
-  const [type, setType] = React.useState(initialAction?.type || "checkbox");
-  const [target, setTarget] = React.useState(initialAction?.target ?? 1);
-  const [step, setStep] = React.useState(initialAction?.step ?? 1);
-  const [unit, setUnit] = React.useState(initialAction?.unit || "");
-  const [scheduleType, setScheduleType] = React.useState(initialAction?.scheduleType || "daily");
-  const [selectedDays, setSelectedDays] = React.useState(initialAction?.days || [0,1,2,3,4,5,6]);
-
-  function toggleDay(dayIndex) {
-    if (selectedDays.includes(dayIndex)) {
-      if (selectedDays.length === 1) return;
-      setSelectedDays(selectedDays.filter(d => d !== dayIndex));
-    } else {
-      setSelectedDays([...selectedDays, dayIndex].sort());
-    }
-  }
-
-  function submit() {
-    if (!name.trim()) return;
-    onSave({
-      id: initialAction?.id || uid(),
-      name: name.trim(),
-      type,
-      target: type === "checkbox" ? 1 : Number(target) || 1,
-      step: type === "checkbox" ? 1 : Number(step) || 1,
-      unit: type === "checkbox" ? "" : unit.trim(),
-      scheduleType,
-      days: scheduleType === "daily" ? [0,1,2,3,4,5,6] : selectedDays,
-    });
-  }
-
-  function handleDelete() {
-    if (confirm(`Delete action "${initialAction.name}"?`)) {
-      onDelete(initialAction.id);
-    }
-  }
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">{isEdit ? "Edit Action" : "Add Action"}</div>
-        <label className="field">
-          <span>Action Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Read 20 pages" autoFocus />
-        </label>
-
-        <label className="field">
-          <span>Frequency / Schedule</span>
-          <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value)}>
-            <option value="daily">Everyday</option>
-            <option value="specific">Specific Days</option>
-          </select>
-        </label>
-
-        {scheduleType === "specific" && (
-          <div className="field">
-            <span>Active Days</span>
-            <div className="days-pill-selector">
-              {DAYS_OF_WEEK.map((day, idx) => (
-                <div
-                  key={day}
-                  className={`day-pill ${selectedDays.includes(idx) ? "active" : ""}`}
-                  onClick={() => toggleDay(idx)}
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <label className="field">
-          <span>Action Type</span>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="checkbox">Simple Checkbox</option>
-            <option value="counter">Step Counter</option>
-          </select>
-        </label>
-
-        {type === "counter" && (
-          <div className="field-row">
-            <label className="field">
-              <span>Target</span>
-              <input type="number" min="1" value={target} onChange={(e) => setTarget(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Step</span>
-              <input type="number" min="1" value={step} onChange={(e) => setStep(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Unit</span>
-              <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="mins, pages" />
-            </label>
-          </div>
-        )}
-
-        <div className="modal-actions">
-          {isEdit && (
-            <button className="btn ghost danger" onClick={handleDelete}>
-              Delete
-            </button>
-          )}
-          <div className="spacer" />
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={submit}>
-            {isEdit ? "Save" : "Add Action"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ShortcutsModal({ onClose }) {
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">Keyboard Shortcuts</div>
-        <div className="shortcut-list">
-          <div className="shortcut-row">
-            <span>Toggle checklist actions</span>
-            <span><kbd>1</kbd> - <kbd>9</kbd></span>
-          </div>
-          <div className="shortcut-row">
-            <span>Navigate weeks</span>
-            <span><kbd>←</kbd> <kbd>→</kbd></span>
-          </div>
-          <div className="shortcut-row">
-            <span>Close modals / drawer</span>
-            <span><kbd>Esc</kbd></span>
-          </div>
-        </div>
-        <div className="modal-actions">
-          <div className="spacer" />
-          <button className="btn primary" onClick={onClose}>Got it</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ==========================================================================
 // 3. Goal Workspace Component
 // ==========================================================================
 function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal }) {
-  const [actionModalOpen, setActionModalOpen] = React.useState(false);
   const [goalModalOpen, setGoalModalOpen] = React.useState(false);
-  const [shortcutsModalOpen, setShortcutsModalOpen] = React.useState(false);
-  const [editingAction, setEditingAction] = React.useState(null);
-  const [selectedDayKey, setSelectedDayKey] = React.useState(null);
-  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [valueLogModalOpen, setValueLogModalOpen] = React.useState(false);
 
-  const today = getTodayKey();
-  const todayDayIndex = new Date().getDay();
-  const todayProgress = goal.history[today] || {};
-
-  const todayActions = React.useMemo(() => {
-    return goal.actions.filter(a => isActionScheduledForDay(a, todayDayIndex));
-  }, [goal.actions, todayDayIndex]);
-
-  const streak = React.useMemo(() => calculateStreak(goal), [goal]);
-  const isLit = React.useMemo(() => isStreakLitToday(goal), [goal, todayProgress]);
-  const weeklyRate = React.useMemo(() => calculateWeeklyRate(goal), [goal]);
-
-  const todayCompletedCount = React.useMemo(() => {
-    return todayActions.filter(a => (todayProgress[a.id] || 0) >= a.target).length;
-  }, [todayActions, todayProgress]);
-
-  React.useEffect(() => {
-    function handleKeyDown(e) {
-      if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
-      
-      if (e.key >= "1" && e.key <= "9") {
-        const index = parseInt(e.key, 10) - 1;
-        if (todayActions[index]) {
-          const action = todayActions[index];
-          if (action.type === "checkbox") {
-            toggleCheckbox(action.id);
-          } else {
-            incrementCounter(action, action.step);
-          }
-        }
-      } else if (e.key === "ArrowLeft") {
-        setWeekOffset(w => w - 1);
-      } else if (e.key === "ArrowRight") {
-        setWeekOffset(w => Math.min(0, w + 1));
-      } else if (e.key === "Escape") {
-        setSelectedDayKey(null);
-        setActionModalOpen(false);
-        setGoalModalOpen(false);
-        setShortcutsModalOpen(false);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [todayActions, todayProgress, goal, onUpdateGoal]);
-
-  function saveAction(action) {
-    const exists = goal.actions.some(a => a.id === action.id);
-    const updatedActions = exists
-      ? goal.actions.map(a => a.id === action.id ? action : a)
-      : [...goal.actions, action];
-
-    onUpdateGoal({ ...goal, actions: updatedActions });
-    setActionModalOpen(false);
-    setEditingAction(null);
+  function logValueUpdate({ delta, resultingValue, note }) {
+    const entry = { id: uid(), date: new Date().toISOString(), delta, resultingValue, note };
+    const newLog = [...(goal.valueLog || []), entry];
+    onUpdateGoal({ ...goal, currentValue: resultingValue, valueLog: newLog });
+    setValueLogModalOpen(false);
   }
 
-  function deleteAction(actionId) {
-    const updatedActions = goal.actions.filter(a => a.id !== actionId);
-    onUpdateGoal({ ...goal, actions: updatedActions });
-    setActionModalOpen(false);
-    setEditingAction(null);
+  function deleteValueLogEntry(entryId) {
+    const newLog = (goal.valueLog || []).filter(e => e.id !== entryId);
+    const recomputedValue = (goal.startValue ?? 0) + newLog.reduce((sum, e) => sum + e.delta, 0);
+    onUpdateGoal({ ...goal, currentValue: recomputedValue, valueLog: newLog });
   }
-
-  function toggleCheckbox(actionId) {
-    const current = todayProgress[actionId] || 0;
-    const next = current > 0 ? 0 : 1;
-    updateProgress(actionId, next);
-  }
-
-  function incrementCounter(action, step) {
-    const current = todayProgress[action.id] || 0;
-    const next = Math.min(action.target, current + step);
-    updateProgress(action.id, next);
-  }
-
-  function decrementCounter(action, step) {
-    const current = todayProgress[action.id] || 0;
-    const next = Math.max(0, current - step);
-    updateProgress(action.id, next);
-  }
-
-  function updateProgress(actionId, val) {
-    const newHistory = {
-      ...goal.history,
-      [today]: {
-        ...(goal.history[today] || {}),
-        [actionId]: val
-      }
-    };
-    onUpdateGoal({ ...goal, history: newHistory });
-  }
-
-  function updateDayNote(dayKey, noteText) {
-    const newNotes = { ...(goal.notes || {}), [dayKey]: noteText };
-    onUpdateGoal({ ...goal, notes: newNotes });
-  }
-
-  const weekDays = React.useMemo(() => {
-    const now = new Date();
-    const currentDayOfWeek = now.getDay();
-    
-    const sunday = new Date(now);
-    sunday.setDate(now.getDate() - currentDayOfWeek + (weekOffset * 7));
-
-    return Array.from({ length: 7 }, (_, i) => {
-      const dayDate = new Date(sunday);
-      dayDate.setDate(sunday.getDate() + i);
-      const key = formatDateKey(dayDate);
-      const dayData = goal.history[key] || {};
-      const dayNote = goal.notes?.[key] || "";
-      
-      const isFuture = key > today;
-      const scheduledActions = goal.actions.filter(a => isActionScheduledForDay(a, i));
-
-      let completedCount = 0;
-      const details = scheduledActions.map(a => {
-        const val = dayData[a.id] || 0;
-        const isDone = val >= a.target;
-        if (isDone) completedCount++;
-        return { ...a, val, isDone };
-      });
-
-      const total = scheduledActions.length;
-      let status = "empty";
-      if (isFuture) {
-        status = "future";
-      } else if (total > 0 && completedCount === total) {
-        status = "full";
-      } else if (completedCount > 0) {
-        status = "partial";
-      }
-
-      return {
-        label: DAYS_OF_WEEK[i],
-        dateStr: dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        key,
-        status,
-        isFuture,
-        completedCount,
-        total,
-        details,
-        note: dayNote
-      };
-    });
-  }, [goal.history, goal.notes, goal.actions, today, weekOffset]);
-
-  const selectedDay = weekDays.find(d => d.key === selectedDayKey);
 
   return (
     <div className="workspace">
@@ -548,10 +321,9 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
           <div>
             <div className="card-category">{goal.category}</div>
             <h2 className="card-title" style={{ fontSize: 24 }}>{goal.title}</h2>
-            <GoalProgressBar completed={todayCompletedCount} total={todayActions.length} />
+            <ValueProgressBar goal={goal} />
           </div>
           <div style={{ display: "flex", gap: "4px" }}>
-            <SymbolButton symbol="⌨" label="Keyboard Shortcuts" onClick={() => setShortcutsModalOpen(true)} />
             <SymbolButton symbol="⚙" label="Workspace Settings" onClick={() => setGoalModalOpen(true)} />
           </div>
         </div>
@@ -559,150 +331,32 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
 
       <div className="workspace-stats-bar">
         <div className="stat-pill">
-          <span className="label">Streak Status</span>
-          <span className="value">
-            <StreakDisplay count={streak} isLit={isLit} />
-          </span>
+          <span className="label">Current</span>
+          <span className="value">{formatNum(goal.currentValue)}{goal.unit}</span>
         </div>
         <div className="stat-pill">
-          <span className="label">7-Day Score</span>
-          <span className="value">{weeklyRate}%</span>
+          <span className="label">Target</span>
+          <span className="value">{formatNum(goal.targetValue)}{goal.unit}</span>
         </div>
         <div className="stat-pill">
-          <span className="label">Actions</span>
-          <span className="value">{goal.actions.length} total</span>
+          <span className="label">Started At</span>
+          <span className="value">{formatNum(goal.startValue)}{goal.unit}</span>
         </div>
       </div>
 
       <div className="action-section">
         <div className="section-title">
-          <span>Today ({DAYS_OF_WEEK[todayDayIndex]})</span>
-          <SymbolButton symbol="+" label="Add Action" onClick={() => { setEditingAction(null); setActionModalOpen(true); }} />
+          <span>Update History</span>
+          <SymbolButton symbol="+" label="Log an Update" onClick={() => setValueLogModalOpen(true)} />
         </div>
-
-        {todayActions.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--graphite)", textAlign: "center", padding: "20px 0" }}>
-            {goal.actions.length === 0 
-              ? "No actions configured yet." 
-              : "No actions scheduled for today."}
-          </div>
-        ) : (
-          <div className="action-list">
-            {todayActions.map((a, idx) => {
-              const val = todayProgress[a.id] || 0;
-              const isDone = val >= a.target;
-
-              return (
-                <div key={a.id} className="action-item">
-                  <div className="action-left">
-                    {idx < 9 && <span className="key-badge">{idx + 1}</span>}
-                    {a.type === "checkbox" ? (
-                      <button className={"checkbox-btn" + (isDone ? " done" : "")} onClick={() => toggleCheckbox(a.id)}>
-                        {isDone ? "✓" : ""}
-                      </button>
-                    ) : (
-                      <span className="checkbox-btn done" style={{ background: isDone ? "var(--ink)" : "var(--line)" }}>
-                        {isDone ? "✓" : ""}
-                      </span>
-                    )}
-                    <div>
-                      <span className={"action-label" + (isDone ? " done" : "")}>{a.name}</span>
-                      <span className="action-schedule-tag">{formatScheduleLabel(a)}</span>
-                    </div>
-                  </div>
-
-                  <div className="action-right">
-                    {a.type === "counter" && (
-                      <div className="action-counter">
-                        <button className="btn small ghost" onClick={() => decrementCounter(a, a.step)}> - </button>
-                        <span style={{ fontSize: 12, color: "var(--graphite)" }}>
-                          {val} / {a.target} {a.unit}
-                        </span>
-                        <button className="btn small ghost" onClick={() => incrementCounter(a, a.step)}> +{a.step} </button>
-                      </div>
-                    )}
-                    <SymbolButton symbol="✎" label="Edit Action" onClick={() => { setEditingAction(a); setActionModalOpen(true); }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <ValueHistoryList goal={goal} onDeleteEntry={deleteValueLogEntry} />
       </div>
 
-      <div className="history-section">
-        <div className="history-nav">
-          <div className="section-title" style={{ margin: 0 }}>Weekly Grid</div>
-          <div style={{ display: "flex", gap: "2px" }}>
-            <SymbolButton symbol="←" label="Previous Week" onClick={() => setWeekOffset(w => w - 1)} />
-            {weekOffset !== 0 && (
-              <SymbolButton symbol="•" label="Return to Today" onClick={() => setWeekOffset(0)} />
-            )}
-            <SymbolButton symbol="→" label="Next Week" onClick={() => setWeekOffset(w => Math.min(0, w + 1))} />
-          </div>
-        </div>
-
-        <div className="history-row">
-          <span className="history-label">
-            {weekOffset === 0 ? "This Week" : weekOffset === -1 ? "Last Week" : `${Math.abs(weekOffset)} Wks Ago`}
-          </span>
-          <div className="days-grid">
-            {weekDays.map((d) => (
-              <button 
-                key={d.key} 
-                type="button"
-                className={`day-box ${d.status} ${selectedDayKey === d.key ? "selected" : ""} ${d.note ? "has-note" : ""}`}
-                onClick={() => !d.isFuture && setSelectedDayKey(prev => prev === d.key ? null : d.key)}
-                aria-label={`${d.label} ${d.dateStr}: ${d.completedCount} of ${d.total} actions completed`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedDay && !selectedDay.isFuture && (
-          <div className="day-drawer">
-            <div className="drawer-header">
-              <span>{selectedDay.label} ({selectedDay.dateStr}) Scheduled Actions</span>
-              <span>{selectedDay.completedCount} / {selectedDay.total} Completed</span>
-            </div>
-
-            {selectedDay.details.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--graphite)" }}>
-                No actions scheduled for this day.
-              </div>
-            ) : (
-              selectedDay.details.map(item => (
-                <div key={item.id} className="drawer-item">
-                  <span style={{ opacity: item.isDone ? 1 : 0.7 }}>
-                    {item.name}
-                  </span>
-                  <span className={`drawer-status ${item.isDone ? "done" : "missed"}`}>
-                    {item.isDone ? "✓ Done" : "— Missed"}
-                    {item.type === "counter" && ` (${item.val}/${item.target} ${item.unit})`}
-                  </span>
-                </div>
-              ))
-            )}
-
-            <input 
-              className="note-input"
-              type="text"
-              placeholder="Add optional note for this day..."
-              value={selectedDay.note}
-              onChange={(e) => updateDayNote(selectedDay.key, e.target.value)}
-            />
-          </div>
-        )}
-      </div>
-
-      {actionModalOpen && (
-        <ActionModal 
-          initialAction={editingAction} 
-          onSave={saveAction} 
-          onDelete={deleteAction}
-          onClose={() => { setActionModalOpen(false); setEditingAction(null); }} 
+      {valueLogModalOpen && (
+        <ValueLogModal
+          goal={goal}
+          onSubmit={logValueUpdate}
+          onClose={() => setValueLogModalOpen(false)}
         />
       )}
 
@@ -715,8 +369,6 @@ function GoalWorkspace({ goal, onBack, onUpdateGoal, onDeleteGoal, onArchiveGoal
           onClose={() => setGoalModalOpen(false)}
         />
       )}
-
-      {shortcutsModalOpen && <ShortcutsModal onClose={() => setShortcutsModalOpen(false)} />}
     </div>
   );
 }
@@ -789,12 +441,12 @@ function FocusGoalTracker() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(goals, null, 2));
     const dlAnchor = document.createElement('a');
     dlAnchor.setAttribute("href", dataStr);
-    dlAnchor.setAttribute("download", `focus_tracker_backup_${getTodayKey()}.json`);
+    dlAnchor.setAttribute("download", `focus_tracker_backup_${formatDateKey(new Date())}.json`);
     document.body.appendChild(dlAnchor);
     dlAnchor.click();
     dlAnchor.remove();
 
-    const todayStr = getTodayKey();
+    const todayStr = formatDateKey(new Date());
     setLastBackup(todayStr);
     window.storage.set("action_goals_backup_date", todayStr);
   }
@@ -808,8 +460,7 @@ function FocusGoalTracker() {
         const imported = JSON.parse(event.target.result);
         const isValid = Array.isArray(imported) && imported.every(g => 
           typeof g.id === 'string' && 
-          typeof g.title === 'string' && 
-          Array.isArray(g.actions)
+          typeof g.title === 'string'
         );
 
         if (isValid) {
@@ -836,10 +487,7 @@ function FocusGoalTracker() {
 
   const hasMeaningfulData = React.useMemo(() => {
     if (!goals || goals.length === 0) return false;
-    return goals.some(g =>
-      (g.actions && g.actions.length > 0) ||
-      (g.history && Object.keys(g.history).length > 0)
-    );
+    return goals.some(g => (g.valueLog && g.valueLog.length > 0));
   }, [goals]);
 
   const activeGoal = goals?.find(g => g.id === activeGoalId);
@@ -884,26 +532,12 @@ function FocusGoalTracker() {
         <>
           <div className="grid">
             {activeGoals.map(g => {
-              const streak = calculateStreak(g);
-              const isLit = isStreakLitToday(g);
-              const weeklyRate = calculateWeeklyRate(g);
-              
-              const todayKey = getTodayKey();
-              const todayDayIndex = new Date().getDay();
-              const scheduledActions = g.actions.filter(a => isActionScheduledForDay(a, todayDayIndex));
-              const dayHistory = g.history[todayKey] || {};
-              const completedCount = scheduledActions.filter(a => (dayHistory[a.id] || 0) >= a.target).length;
-
               return (
                 <div key={g.id} className="card" onClick={() => setActiveGoalId(g.id)}>
                   <div className="card-category">{g.category}</div>
                   <h3 className="card-title">{g.title}</h3>
-                  <div style={{ marginTop: "4px" }}>
-                    <GoalProgressBar completed={completedCount} total={scheduledActions.length} />
-                  </div>
-                  <div className="card-stats">
-                    <span>{weeklyRate}% 7d score</span>
-                    <StreakDisplay count={streak} isLit={isLit} />
+                  <div style={{ marginTop: "auto" }}>
+                    <ValueProgressBar goal={g} />
                   </div>
                 </div>
               );
